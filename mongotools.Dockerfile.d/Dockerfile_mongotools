@@ -1,7 +1,9 @@
 FROM debian:10.12-slim AS builder
 WORKDIR /tmp
 RUN apt-get update \
- && apt-get install --no-install-recommends -y curl ca-certificates \
+ && apt-get install --no-install-recommends -y \
+      ca-certificates \
+      curl \
  && curl https://downloads.mongodb.com/compass/mongodb-mongosh_1.4.1_amd64.deb -o mongosh.deb \
  && curl https://fastdl.mongodb.org/tools/db/mongodb-database-tools-debian10-x86_64-100.5.2.tgz -o mongodb-tools.tgz
 RUN dpkg -i mongosh.deb \
@@ -10,7 +12,11 @@ RUN dpkg -i mongosh.deb \
 FROM debian:10.12-slim
 WORKDIR /root
 RUN apt-get update \
- && apt-get install --no-install-recommends -y libgssapi-krb5-2 zstd \
+ && apt-get install --no-install-recommends -y \
+      libgssapi-krb5-2 \
+      zstd \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /usr/bin/mongo[sdr][hue]* /usr/bin/
-ENTRYPOINT ["/bin/bash"]
+COPY ./docker-entrypoint.sh .
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["/bin/bash"]
