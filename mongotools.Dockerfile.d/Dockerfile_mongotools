@@ -4,7 +4,7 @@ RUN apt-get update \
  && apt-get install --no-install-recommends -y \
       ca-certificates \
       curl \
- && curl https://downloads.mongodb.com/compass/mongodb-mongosh_1.4.1_amd64.deb -o mongosh.deb \
+ && curl https://downloads.mongodb.com/compass/mongodb-mongosh_1.5.0_amd64.deb -o mongosh.deb \
  && curl https://fastdl.mongodb.org/tools/db/mongodb-database-tools-debian10-x86_64-100.5.2.tgz -o mongodb-tools.tgz
 RUN dpkg -i mongosh.deb \
  && tar -xvzf mongodb-tools.tgz --strip 2 -C /usr/bin
@@ -17,6 +17,6 @@ RUN apt-get update \
       zstd \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /usr/bin/mongo[sdr][hue]* /usr/bin/
-COPY ./docker-entrypoint.sh .
+COPY ./tools/docker-entrypoint.sh .
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["/bin/bash"]
