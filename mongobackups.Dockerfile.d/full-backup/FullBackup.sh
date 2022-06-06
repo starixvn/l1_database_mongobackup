@@ -74,6 +74,7 @@ urlencode() {
 
 cleanup() {
   echo "Check and cleanup after trap"
+  VERBOSE="$VERBOSE" \
   mongosh \
     --quiet \
     --host "$MONGO_HOST" \
@@ -81,19 +82,7 @@ cleanup() {
     --username "$MONGO_USER" \
     --password "$MONGO_PASS" \
     --authenticationDatabase "$MONGO_AUTHDB" \
-    --eval "
-      locks = db.adminCommand({lockInfo: 1}).lockInfo
-        .filter(_ => _.granted.some(__ => /^fs/.test(__.desc)))
-        .map(_ => { delete _.pending; return _; });
-      console.log(\`There are \${locks.length} fslock remaining. Unlocking...\`);
-      for (let i = 0; i < locks.length; i++) {
-        console.log(db.fsyncUnlock());
-      }
-      console.log(db.adminCommand({lockInfo: 1}).lockInfo
-        .filter(_ => _.granted.some(__ => /^fs/.test(__.desc)))
-        .map(_ => { delete _.pending; return _; })
-      );
-    " \
+    --file /scripts/cleanupLocks.js \
     -- "$MONGO_URI"
   exit 10
 }
@@ -143,6 +132,10 @@ done
 MONGO_URI="$1"
 if [ -z "$BACKUP_NAME" ]; then BACKUP_NAME="backup"; fi
 BACKUP_NAME+=-$(date -u "+%Y%m%d-%H%M00")
+BACKUP_FULLPATH="$BACKUP_PATH/$BACKUP_NAME"
+
+# Export some variables to use in child processes
+export VERBOSE DATA_PATH BACKUP_FULLPATH 
 
 ### PARSING INPUT
 ###   (Variable should be ready to be used at this point)
@@ -163,6 +156,7 @@ if [ "$VERBOSE" == true ]; then
   echo MONGO_AUTHDB="$MONGO_AUTHDB"
   echo BACKUP_NAME="$BACKUP_NAME"
   echo BACKUP_PATH="$BACKUP_PATH"
+  echo BACKUP_FULLPATH="$BACKUP_FULLPATH"
   echo DATA_PATH="$DATA_PATH"
 fi
 
@@ -175,7 +169,7 @@ mongosh \
   --username "$MONGO_USER" \
   --password "$MONGO_PASS" \
   --authenticationDatabase "$MONGO_AUTHDB" \
-  --eval "exit(+(db.adminCommand({getCmdLineOpts: 1}).parsed.storage.dbPath !== '$DATA_PATH'))" \
+  --file /scripts/checkDataPath.js \
   -- "$MONGO_URI"
 ASSERT_RESULT=$?
 if [ "$ASSERT_RESULT" != 0 ]; then
@@ -205,7 +199,7 @@ mongosh \
   --username "$MONGO_USER" \
   --password "$MONGO_PASS" \
   --authenticationDatabase "$MONGO_AUTHDB" \
-  --eval "exit(db.adminCommand({lockInfo: 1}).lockInfo.filter(_ => _.granted.some(__ => /^fs/.test(__.desc))).length)" \
+  --file /scripts/fsLockInfo.js \
   -- "$MONGO_URI"
 ASSERT_RESULT=$?
 if [ "$ASSERT_RESULT" != 0 ]; then
@@ -236,7 +230,7 @@ trap 'echo Process $$ terminated by SIGTERM; cleanup' SIGTERM
 
 
 ################################################################################
-### 
+### BACKUP PROCESS
 #
 
 verbose main "Starting full backup process"
@@ -248,7 +242,7 @@ mongosh \
   --username "$MONGO_USER" \
   --password "$MONGO_PASS" \
   --authenticationDatabase "$MONGO_AUTHDB" \
-  --eval "console.log(db.fsyncLock());" \
+  --file /scripts/fsyncLock.js \
   -- "$MONGO_URI"
 verbose lock "Finished locking process"
 
@@ -260,16 +254,26 @@ mongosh \
   --username "$MONGO_USER" \
   --password "$MONGO_PASS" \
   --authenticationDatabase "$MONGO_AUTHDB" \
-  --eval "
-    locks = db.adminCommand({lockInfo: 1}).lockInfo
-      .filter(_ => _.granted.some(__ => /^fs/.test(__.desc)))
-      .map(_ => { delete _.pending; return _; });
-    console.log(locks);
-   " \
+  --file /scripts/fsLockVerify.js \
   -- "$MONGO_URI"
+LOCKING_STATUS=$?
+verbose lock "Verify locking status: $LOCKING_STATUS fsync locks granted"
+
+
+verbose timestamp "Export backup timestamp"
+mongosh \
+  --quiet \
+  --host "$MONGO_HOST" \
+  --port "$MONGO_PORT" \
+  --username "$MONGO_USER" \
+  --password "$MONGO_PASS" \
+  --authenticationDatabase "$MONGO_AUTHDB" \
+  --file /scripts/captureTimestamp.js \
+  -- "$MONGO_URI"
+verbose timestamp $(cat $BACKUP_FULLPATH.ts)
 
 verbose backup "Starting copying data files"
-tar -I 'zstd -k9T6' -cvf "$BACKUP_PATH/$BACKUP_NAME.tar.zstd" "$DATA_PATH"
+tar -I 'zstd -k9T6' -cvf "$BACKUP_FULLPATH.tar.zstd" "$DATA_PATH"
 verbose backup "Finished copying data files"
 
 verbose lock "Starting unlocking process"
@@ -280,7 +284,7 @@ mongosh \
   --username "$MONGO_USER" \
   --password "$MONGO_PASS" \
   --authenticationDatabase "$MONGO_AUTHDB" \
-  --eval "console.log(db.fsyncUnlock());" \
+  --file /scripts/fsyncUnlock.js \
   -- "$MONGO_URI"
 verbose lock "Finished unlocking process"
 
@@ -292,19 +296,13 @@ mongosh \
   --username "$MONGO_USER" \
   --password "$MONGO_PASS" \
   --authenticationDatabase "$MONGO_AUTHDB" \
-  --eval "
-    locks = db.adminCommand({lockInfo: 1}).lockInfo
-      .filter(_ => _.granted.some(__ => /^fs/.test(__.desc)))
-      .map(_ => { delete _.pending; return _; });
-    console.log(locks);
-    exit(locks.length);
-   " \
+  --file /scripts/fsLockVerify.js \
   -- "$MONGO_URI"
 LOCKING_STATUS=$?
-verbose lock "Verify locking status: $LOCKING_STATUS locks remained"
+verbose lock "Verify locking status: $LOCKING_STATUS fsync locks remained"
 
 verbose main "Finished full backup process"
 
-###
+### BACKUP PROCESS
 ###
 ################################################################################
