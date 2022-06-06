@@ -1,6 +1,7 @@
 FROM git3.nexdev.net:5050/l1/database/images/mongotools:1.0.0
 WORKDIR /root
 COPY ./full-backup/*.sh ./
+COPY ./full-backup/scripts/ /scripts/
 VOLUME /backup
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["./FullBackup.sh", "-h"]
