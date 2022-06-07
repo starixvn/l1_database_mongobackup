@@ -96,8 +96,7 @@ cleanup() {
 #
 
 # NOTE: This is GNU getopt. It is the default on Linux system.
-#       But if you encounter an unknown error, this might be a
-#       thing to check.
+#       But if you encounter an unknown error, this might be a thing to check.
 TEMPOPT=$(getopt -n 'FullBackup' \
                  -o hvVu:p: \
                  -l help,host:,port:,version,verbose,username:,password:,authenticationDatabase:,backupPath:,backupName:,dataPath: \
@@ -109,6 +108,13 @@ if [ $? != 0 ]; then echo "Terminating..." >&2; exit 1; fi
 
 # Set parsed option to this script
 eval set -- "$TEMPOPT"
+
+# Set default value
+VERBOSE=false
+MONGO_AUTHDB="admin"
+BACKUP_PATH="/fullbackup"
+BACKUP_NAME="backup"
+DATA_PATH="/data/db"
 
 # Process options
 while true; do
@@ -130,7 +136,8 @@ while true; do
   esac
 done
 MONGO_URI="$1"
-if [ -z "$BACKUP_NAME" ]; then BACKUP_NAME="backup"; fi
+
+# Cook values
 BACKUP_NAME+=-$(date -u "+%Y%m%d-%H%M00")
 BACKUP_FULLPATH="$BACKUP_PATH/$BACKUP_NAME"
 
@@ -273,7 +280,11 @@ mongosh \
 verbose timestamp $(cat $BACKUP_FULLPATH.ts)
 
 verbose backup "Starting copying data files"
-tar -I 'zstd -k9T6' -cvf "$BACKUP_FULLPATH.tar.zstd" "$DATA_PATH"
+if [ "$VERBOSE" == true ]; then
+  tar -I 'zstd -k9T6' -cvf "$BACKUP_FULLPATH.tar.zstd" "$DATA_PATH"
+else
+  tar -I 'zstd -k9T6' -cf "$BACKUP_FULLPATH.tar.zstd" "$DATA_PATH"
+fi
 verbose backup "Finished copying data files"
 
 verbose lock "Starting unlocking process"
@@ -304,5 +315,5 @@ verbose lock "Verify locking status: $LOCKING_STATUS fsync locks remained"
 verbose main "Finished full backup process"
 
 ### BACKUP PROCESS
-###
+###   (It's done)
 ################################################################################
