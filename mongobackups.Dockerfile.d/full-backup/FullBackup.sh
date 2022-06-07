@@ -115,6 +115,11 @@ if [ $? != 0 ]; then echo "Terminating..." >&2; exit 1; fi
 # Set parsed option to this script
 eval set -- "$TEMPOPT"
 
+# Get number of CPUs
+CPUs=$(cat /proc/cpuinfo | grep processor | wc -l)
+CPUs=$(expr $CPUs \* 3 + 3)
+CPUs=$(expr $CPUs / 4)
+
 # Set default value
 VERBOSE=false
 MONGO_AUTHDB="admin"
@@ -148,7 +153,7 @@ BACKUP_NAME+=-$(date -u "+%Y%m%d-%H%M00")
 BACKUP_FULLPATH="$BACKUP_PATH/$BACKUP_NAME"
 
 # Export some variables to use in child processes
-export VERBOSE DATA_PATH BACKUP_FULLPATH 
+export VERBOSE DATA_PATH BACKUP_FULLPATH
 
 ### PARSING INPUT
 ###   (Variable should be ready to be used at this point)
@@ -247,6 +252,7 @@ trap 'echo Process $$ terminated by SIGTERM; cleanup' SIGTERM
 #
 
 INFO=true verbose main "Starting full backup process"
+INFO=true verbose main "Backup process will use $CPUs cores"
 
 verbose lock "Starting locking process"
 mongosh \
@@ -288,9 +294,9 @@ INFO=true verbose timestamp $(cat $BACKUP_FULLPATH.ts)
 
 verbose backup "Starting copying data files"
 if [ "$VERBOSE" == true ]; then
-  tar -I 'zstd -k9T6' -cvf "$BACKUP_FULLPATH.tar.zstd" "$DATA_PATH"
+  tar -I "zstd -k9T$CPUs" -cvf "$BACKUP_FULLPATH.tar.zstd" "$DATA_PATH"
 else
-  tar -I 'zstd -k9T6' -cf "$BACKUP_FULLPATH.tar.zstd" "$DATA_PATH"
+  tar -I "zstd -k9T$CPUs" -cf "$BACKUP_FULLPATH.tar.zstd" "$DATA_PATH"
 fi
 verbose backup "Finished copying data files"
 
