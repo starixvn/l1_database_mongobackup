@@ -41,14 +41,20 @@ version() {
 
 # Verbose function
 verbose() {
-  if [ "$VERBOSE" == true ]; then
+  local ACTIVATE=$VERBOSE
+  local LABEL="V"
+  if [ "$INFO" == true ]; then
+    ACTIVATE=true
+    LABEL="I"
+  fi
+  if [ "$ACTIVATE" == true ]; then
     local FLAG=$1
     shift 1
     local REST="$@"
     if [ ! -z "$REST" ]; then
-      echo "$(date -u "+%Y-%m-%dT%H:%M:%S.%3N%z") V  FULLBACKUP [$FLAG] $REST"
+      echo "$(date -u "+%Y-%m-%dT%H:%M:%S.%3N%z") $LABEL  FULLBACKUP [$FLAG] $REST"
     else
-      echo "$(date -u "+%Y-%m-%dT%H:%M:%S.%3N%z") V  FULLBACKUP [-] $FLAG $REST"
+      echo "$(date -u "+%Y-%m-%dT%H:%M:%S.%3N%z") $LABEL  FULLBACKUP [-] $FLAG $REST"
     fi
   fi
 }
@@ -240,7 +246,8 @@ trap 'echo Process $$ terminated by SIGTERM; cleanup' SIGTERM
 ### BACKUP PROCESS
 #
 
-verbose main "Starting full backup process"
+INFO=true verbose main "Starting full backup process"
+
 verbose lock "Starting locking process"
 mongosh \
   --quiet \
@@ -277,7 +284,7 @@ mongosh \
   --authenticationDatabase "$MONGO_AUTHDB" \
   --file /scripts/captureTimestamp.js \
   -- "$MONGO_URI"
-verbose timestamp $(cat $BACKUP_FULLPATH.ts)
+INFO=true verbose timestamp $(cat $BACKUP_FULLPATH.ts)
 
 verbose backup "Starting copying data files"
 if [ "$VERBOSE" == true ]; then
@@ -312,7 +319,7 @@ mongosh \
 LOCKING_STATUS=$?
 verbose lock "Verify locking status: $LOCKING_STATUS fsync locks remained"
 
-verbose main "Finished full backup process"
+INFO=true verbose main "Finished full backup process"
 
 ### BACKUP PROCESS
 ###   (It's done)
