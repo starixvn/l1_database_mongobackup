@@ -302,7 +302,7 @@ INFO=true verbose timestamp $(cat $BACKUP_FULLPATH.ts)
 
 verbose backup "Starting copying data files"
 if [ "$VERBOSE" == true ]; then
-  tar -I "zstd -k9T$CPUs" -cvf "$BACKUP_FULLPATH.full.tar.zstd" "$DATA_PATH"
+  tar -I "zstd -k9T$CPUs" -cvvf "$BACKUP_FULLPATH.full.tar.zstd" "$DATA_PATH"
 else
   tar -I "zstd -k9T$CPUs" -cf "$BACKUP_FULLPATH.full.tar.zstd" "$DATA_PATH"
 fi
