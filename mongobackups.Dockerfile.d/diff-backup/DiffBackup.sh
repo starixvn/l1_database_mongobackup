@@ -262,9 +262,9 @@ verbose backup "Finished dumping oplog"
 
 verbose backup "Compress oplog file"
 if [ "$VERBOSE" == true ]; then
-  tar -I "zstd -k9T$CPUs" -cvf "$BACKUP_FULLPATH.diff.tar.zstd" "$TMP_FOLDER"
+  tar -I "zstd -k9T$CPUs" -cvf "$BACKUP_FULLPATH.diff.tar.zstd" -C "$TMP_FOLDER" .
 else
-  tar -I "zstd -k9T$CPUs" -cf "$BACKUP_FULLPATH.diff.tar.zstd" "$TMP_FOLDER"
+  tar -I "zstd -k9T$CPUs" -cf "$BACKUP_FULLPATH.diff.tar.zstd" -C "$TMP_FOLDER" .
 fi
 verbose backup "Finished compressing oplog file"
 
