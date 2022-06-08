@@ -259,8 +259,10 @@ verbose folder "Create temporary dumping folder"
 mkdir /tmp/mongodump
 verbose folder "Created temporary dumping folder"
 
-verbose backup "Starting dumping oplog"
 INFO=true verbose timestamp $TIMESTAMP
+cp $TS_FILE $TMP_FOLDER
+
+verbose backup "Starting dumping oplog"
 mongodump \
   --verbose=$VERBOSE_LEVEL \
   --host "$MONGO_HOST" \
