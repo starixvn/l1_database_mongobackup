@@ -261,7 +261,6 @@ mongodump \
   {\"ns\": {\"\$not\": {\"\$regex\": \"_tmp(cuocs|ones)\$\"}}},
   {\"ns\": {\"\$not\": {\"\$regex\": \"system[.]profile\$\"}}}
 ]}" \
-  --queryFile /scripts/query.json \
   --out $TMP_FOLDER \
   --uri "$MONGO_URI"
 verbose backup "Finished dumping oplog"
