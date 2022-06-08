@@ -217,9 +217,8 @@ if [ -n "$TIMESTAMP" ] && [ "$TIMESTAMP" -eq "$TIMESTAMP" ] 2>/dev/null; then
     --authenticationDatabase "$MONGO_AUTHDB" \
     --file /scripts/checkTimestamp.js \
     -- "$MONGO_URI"
-  ASSERT_RESULT=$?
-  if [ "$ASSERT_RESULT" != 0 ]; then
-    ERROR=true verbose assert "Check timestamp failed, oplog is stalled. [$TIMESTAMP] < [$ASSERT_RESULT]"
+  if [ "$?" != 0 ]; then
+    ERROR=true verbose assert "Check timestamp failed, oplog is stalled. [$TIMESTAMP] < [$(cat /tmp/stallLimit)]"
     exit 21
   fi
 else
