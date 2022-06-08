@@ -256,7 +256,7 @@ mongodump \
   --db "local" \
   --collection "oplog.rs" \
   --query "
-{ "$and": [
+{ \"\$and\": [
   {\"ts\": {\"\$gte\": {\"\$timestamp\": {\"t\": $TIMESTAMP, \"i\": 0}}}},
   {\"ns\": {\"\$not\": {\"\$regex\": \"_tmp(cuocs|ones)\$\"}}},
   {\"ns\": {\"\$not\": {\"\$regex\": \"system[.]profile\$\"}}}
