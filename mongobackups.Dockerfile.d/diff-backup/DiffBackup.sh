@@ -173,6 +173,9 @@ else
   VERBOSE_LEVEL=0
 fi
 
+# Export some variables to use in child processes
+export TIMESTAMP
+
 ### PARSING INPUT
 ###   (Variable should be ready to be used at this point)
 ################################################################################
@@ -205,7 +208,20 @@ if [ ! -d "$BACKUP_PATH" ]; then
 fi
 verbose assert "Check timestamp"
 if [ -n "$TIMESTAMP" ] && [ "$TIMESTAMP" -eq "$TIMESTAMP" ] 2>/dev/null; then
-  true
+  mongosh \
+    --quiet \
+    --host "$MONGO_HOST" \
+    --port "$MONGO_PORT" \
+    --username "$MONGO_USER" \
+    --password "$MONGO_PASS" \
+    --authenticationDatabase "$MONGO_AUTHDB" \
+    --file /scripts/checkTimestamp.js \
+    -- "$MONGO_URI"
+  ASSERT_RESULT=$?
+  if [ "$ASSERT_RESULT" != 0 ]; then
+    ERROR=true verbose assert "Check timestamp failed, oplog is stalled. [$TIMESTAMP] < [$ASSERT_RESULT]"
+    exit 21
+  fi
 else
   ERROR=true verbose assert "Timestamp is not number - [$TIMESTAMP]"
   exit 14
