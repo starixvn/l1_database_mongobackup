@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# If parameters are not start with a command, pass it to FullBackup script
+# If parameters are not start with a command, pass it to backup script
 if [ "${1:0:1}" == "-" ]; then
   exec ./FullBackup.sh "$@"
 fi

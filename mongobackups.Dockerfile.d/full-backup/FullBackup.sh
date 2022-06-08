@@ -1,6 +1,7 @@
 #!/bin/bash
 
 SCRIPT_VERSION=1.0.0
+SCRIPT_LABEL=FULLBACKUP
 
 ################################################################################
 ###   FUNCTIONS
@@ -8,7 +9,7 @@ SCRIPT_VERSION=1.0.0
 
 # Usage function
 usage() {
-  echo "FullBackup version: $SCRIPT_VERSION
+  echo "$SCRIPT_LABEL version: $SCRIPT_VERSION
     -h  --help                    Print this help
         --host                    Input mongodb host address
         --port                    Input mongodb port
@@ -29,7 +30,7 @@ usage() {
 
 # Version function
 version() {
-  echo "FullBackup version: $SCRIPT_VERSION" 1>&2
+  echo "$SCRIPT_LABEL version: $SCRIPT_VERSION" 1>&2
   echo "---" 1>&2
   echo "mongosh version: $(mongosh --version)" 1>&2
   echo "---" 1>&2
@@ -43,6 +44,10 @@ version() {
 verbose() {
   local ACTIVATE=$VERBOSE
   local LABEL="V"
+  if [ "$ERROR" == true ]; then
+    ACTIVATE=true
+    LABEL="E"
+  fi
   if [ "$INFO" == true ]; then
     ACTIVATE=true
     LABEL="I"
@@ -52,9 +57,9 @@ verbose() {
     shift 1
     local REST="$@"
     if [ ! -z "$REST" ]; then
-      echo "$(date -u "+%Y-%m-%dT%H:%M:%S.%3N%z") $LABEL  FULLBACKUP [$FLAG] $REST"
+      echo "$(date -u "+%Y-%m-%dT%H:%M:%S.%3N%z") $LABEL  $SCRIPT_LABEL [$FLAG] $REST"
     else
-      echo "$(date -u "+%Y-%m-%dT%H:%M:%S.%3N%z") $LABEL  FULLBACKUP [-] $FLAG $REST"
+      echo "$(date -u "+%Y-%m-%dT%H:%M:%S.%3N%z") $LABEL  $SCRIPT_LABEL [-] $FLAG $REST"
     fi
   fi
 }
@@ -80,7 +85,6 @@ urlencode() {
 
 cleanup() {
   echo "Check and cleanup after trap"
-  VERBOSE="$VERBOSE" \
   mongosh \
     --quiet \
     --host "$MONGO_HOST" \
@@ -103,14 +107,17 @@ cleanup() {
 
 # NOTE: This is GNU getopt. It is the default on Linux system.
 #       But if you encounter an unknown error, this might be a thing to check.
-TEMPOPT=$(getopt -n 'FullBackup' \
+TEMPOPT=$(getopt -n "$SCRIPT_LABEL" \
                  -o hvVu:p: \
                  -l help,host:,port:,version,verbose,username:,password:,authenticationDatabase:,backupPath:,backupName:,dataPath: \
                  -- "$@" \
          )
 
 # If getopt return non-0 code, terminate this script
-if [ $? != 0 ]; then echo "Terminating..." >&2; exit 1; fi
+if [ $? != 0 ]; then
+  ERROR=true verbose getopt "Terminating..."
+  exit 1
+fi
 
 # Set parsed option to this script
 eval set -- "$TEMPOPT"
@@ -191,20 +198,20 @@ mongosh \
   -- "$MONGO_URI"
 ASSERT_RESULT=$?
 if [ "$ASSERT_RESULT" != 0 ]; then
-  verbose assert "Check data path failed, exit $ASSERT_RESULT"
+  ERROR=true verbose assert "Check data path failed, exit $ASSERT_RESULT"
   exit $[10 + $ASSERT_RESULT]
 fi
 
 # Checking backup folder and data folder exists
 verbose assert "Check data folder exists"
 if [ ! -d "$DATA_PATH" ]; then
-  verbose assert "Check data folder exists failed"
+  ERROR=true verbose assert "Check data folder exists failed"
   exit 12;
 fi
 
 verbose assert "Check backup folder exists"
 if [ ! -d "$BACKUP_PATH" ]; then
-  verbose assert "Check backup folder exists failed"
+  ERROR=true verbose assert "Check backup folder exists failed"
   exit 13;
 fi
 
@@ -221,7 +228,7 @@ mongosh \
   -- "$MONGO_URI"
 ASSERT_RESULT=$?
 if [ "$ASSERT_RESULT" != 0 ]; then
-  verbose assert "Check fsync lock failed, there are $ASSERT_RESULT locks on the database"
+  ERROR=true verbose assert "Check fsync lock failed, there are $ASSERT_RESULT locks on the database"
   exit $[20 + $ASSERT_RESULT]
 fi
 
@@ -294,9 +301,9 @@ INFO=true verbose timestamp $(cat $BACKUP_FULLPATH.ts)
 
 verbose backup "Starting copying data files"
 if [ "$VERBOSE" == true ]; then
-  tar -I "zstd -k9T$CPUs" -cvf "$BACKUP_FULLPATH.tar.zstd" "$DATA_PATH"
+  tar -I "zstd -k9T$CPUs" -cvf "$BACKUP_FULLPATH.full.tar.zstd" "$DATA_PATH"
 else
-  tar -I "zstd -k9T$CPUs" -cf "$BACKUP_FULLPATH.tar.zstd" "$DATA_PATH"
+  tar -I "zstd -k9T$CPUs" -cf "$BACKUP_FULLPATH.full.tar.zstd" "$DATA_PATH"
 fi
 verbose backup "Finished copying data files"
 
