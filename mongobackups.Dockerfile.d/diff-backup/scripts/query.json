@@ -1,0 +1,4 @@
+{ "$and": [
+  {"ns": {"$not": {"$regex": "_tmp(cuocs|ones)$"}}},
+  {"ns": {"$not": {"$regex": "system[.]profile$"}}}
+]}
