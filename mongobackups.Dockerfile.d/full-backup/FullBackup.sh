@@ -94,6 +94,7 @@ cleanup() {
     --authenticationDatabase "$MONGO_AUTHDB" \
     --file /scripts/cleanupLocks.js \
     -- "$MONGO_URI"
+  rm $BACKUP_FULLPATH*
   exit 10
 }
 ### FUNCTIONS DONE
