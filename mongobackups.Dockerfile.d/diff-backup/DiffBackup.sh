@@ -257,7 +257,7 @@ mongodump \
   --collection "oplog.rs" \
   --query '{"$and": [{"ns": {"$not": {"$regex": "_tmp(cuocs|ones)$"}}}, {"ns": {"$not": {"$regex": "system[.]profile$"}}}]}' \
   --out $TMP_FOLDER \
-  -- "$MONGO_URI"
+  --uri "$MONGO_URI"
 verbose backup "Finished dumping oplog"
 
 verbose backup "Compress oplog file"
