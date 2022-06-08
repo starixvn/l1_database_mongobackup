@@ -1,0 +1,7 @@
+FROM git3.nexdev.net:5050/l1/database/images/mongotools:1.0.0
+WORKDIR /root
+COPY ./diff-backup/*.sh ./
+COPY ./diff-backup/scripts/ /scripts/
+VOLUME /diffbackup
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["./DiffBackup.sh", "-h"]
