@@ -262,6 +262,18 @@ trap 'echo Process $$ terminated by SIGTERM; cleanup' SIGTERM
 INFO=true verbose main "Starting full backup process"
 INFO=true verbose main "Backup process will use $CPUs cores"
 
+verbose timestamp "Export backup timestamp"
+mongosh \
+  --quiet \
+  --host "$MONGO_HOST" \
+  --port "$MONGO_PORT" \
+  --username "$MONGO_USER" \
+  --password "$MONGO_PASS" \
+  --authenticationDatabase "$MONGO_AUTHDB" \
+  --file /scripts/captureTimestamp.js \
+  -- "$MONGO_URI"
+INFO=true verbose timestamp $(cat $BACKUP_FULLPATH.ts)
+
 verbose lock "Starting locking process"
 mongosh \
   --quiet \
@@ -286,19 +298,6 @@ mongosh \
   -- "$MONGO_URI"
 LOCKING_STATUS=$?
 verbose lock "Verify locking status: $LOCKING_STATUS fsync locks granted"
-
-
-verbose timestamp "Export backup timestamp"
-mongosh \
-  --quiet \
-  --host "$MONGO_HOST" \
-  --port "$MONGO_PORT" \
-  --username "$MONGO_USER" \
-  --password "$MONGO_PASS" \
-  --authenticationDatabase "$MONGO_AUTHDB" \
-  --file /scripts/captureTimestamp.js \
-  -- "$MONGO_URI"
-INFO=true verbose timestamp $(cat $BACKUP_FULLPATH.ts)
 
 verbose backup "Starting copying data files"
 if [ "$VERBOSE" == true ]; then

@@ -161,10 +161,16 @@ BACKUP_NAME+=-$(date -u "+%Y%m%d-%H%M00")
 BACKUP_FULLPATH="$BACKUP_PATH/$BACKUP_NAME"
 
 # Get timestamp for diff backup
-TS_FILE=$(ls -r $BACKUP_FULL/*.ts | head -1)
-if [ ! -z "$TS_FILE" ]; then
-  TIMESTAMP=$(cat $TS_FILE | tr -d '\r\n')
+TS_FULLFILE=$(ls -r $BACKUP_FULL/*.ts | head -1)
+if [ ! -z "$TS_FULLFILE" ]; then
+  TIMESTAMP_FULL=$(cat $TS_FULLFILE | tr -d '\r\n')
 fi
+TS_DIFFFILE=$(ls -r $BACKUP_PATH/*.ts | head -1)
+if [ ! -z "$TS_DIFFFILE" ]; then
+  TIMESTAMP_DIFF=$(cat $TS_DIFFFILE | tr -d '\r\n')
+fi
+TIMESTAMP=$TIMESTAMP_FULL
+(( TIMESTAMP_DIFF > TIMESTAMP_FULL )) && TIMESTAMP=$TIMESTAMP_DIFF
 
 # Verbose level
 if [ "$VERBOSE" == true ]; then
@@ -197,7 +203,10 @@ if [ "$VERBOSE" == true ]; then
   echo BACKUP_PATH="$BACKUP_PATH"
   echo BACKUP_NAME="$BACKUP_NAME"
   echo BACKUP_FULLPATH="$BACKUP_FULLPATH"
-  echo TS_FILE="$TS_FILE"
+  echo TS_FULLFILE="$TS_FULLFILE"
+  echo TS_DIFFFILE="$TS_DIFFFILE"
+  echo TIMESTAMP_FULL="$TIMESTAMP_FULL"
+  echo TIMESTAMP_DIFF="$TIMESTAMP_DIFF"
   echo TIMESTAMP="$TIMESTAMP"
 fi
 
@@ -260,7 +269,20 @@ mkdir /tmp/mongodump
 verbose folder "Created temporary dumping folder"
 
 INFO=true verbose timestamp $TIMESTAMP
-cp $TS_FILE $TMP_FOLDER
+(( TIMESTAMP == TIMESTAMP_FULL )) && cp $TS_FULLFILE $TMP_FOLDER
+(( TIMESTAMP == TIMESTAMP_DIFF )) && cp $TS_DIFFFILE $TMP_FOLDER
+
+verbose timestamp "Export backup timestamp"
+mongosh \
+  --quiet \
+  --host "$MONGO_HOST" \
+  --port "$MONGO_PORT" \
+  --username "$MONGO_USER" \
+  --password "$MONGO_PASS" \
+  --authenticationDatabase "$MONGO_AUTHDB" \
+  --file /scripts/captureTimestamp.js \
+  -- "$MONGO_URI"
+INFO=true verbose timestamp $(cat $BACKUP_FULLPATH.ts)
 
 verbose backup "Starting dumping oplog"
 mongodump \
