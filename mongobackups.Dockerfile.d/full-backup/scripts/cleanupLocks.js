@@ -1,21 +1,20 @@
 {
   const verbose = (process.env.VERBOSE === 'true');
-  const locks = db.adminCommand({lockInfo: 1}).lockInfo
-                  .filter(resource => resource.granted.some(lock => /^fs/.test(lock.desc)));
+  let locks = db.adminCommand({currentOp: 1, $ownOps: true}).fsyncLock;
 
   if (verbose)
-    console.log(`There are ${locks.length} fslock remaining. Unlocking...`);
+    console.log(`There are fslock remaining. Unlocking...`);
 
-  for (let i = 0; i < locks.length; i++) {
+  let i = 1;
+  while (locks) {
     const unlock = db.fsyncUnlock();
     if (verbose)
-      console.log(`[${i}]`, unlock);
+      console.log(`[${i++}]`, unlock);
+    locks = db.adminCommand({currentOp: 1, $ownOps: true}).fsyncLock;
   }
 
   if (verbose) {
-    const locks = db.adminCommand({lockInfo: 1}).lockInfo
-                    .filter(resource => resource.granted.some(lock => /^fs/.test(lock.desc)))
-                    .map(resource => { delete resource.pending; return resource; });
-    console.log(locks);
+    const locks = db.adminCommand({currentOp: 1, $ownOps: true});
+    console.log((({fsyncLock, info}) => ({fsyncLock, info}))(locks));
   }
 }
