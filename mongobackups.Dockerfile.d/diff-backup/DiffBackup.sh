@@ -85,15 +85,7 @@ urlencode() {
 
 cleanup() {
   echo "Check and cleanup after trap"
-  mongosh \
-    --quiet \
-    --host "$MONGO_HOST" \
-    --port "$MONGO_PORT" \
-    --username "$MONGO_USER" \
-    --password "$MONGO_PASS" \
-    --authenticationDatabase "$MONGO_AUTHDB" \
-    --file /scripts/cleanupLocks.js \
-    -- "$MONGO_URI"
+  rm $BACKUP_FULLPATH*
   exit 10
 }
 ### FUNCTIONS DONE
@@ -302,6 +294,13 @@ mongodump \
 ]}" \
   --out $TMP_FOLDER \
   --uri "$MONGO_URI"
+BACKUP_STATUS=$?
+if [ "$BACKUP_STATUS" != 0 ]; then
+  ERROR=true verbose assert "Error while dumping oplog, exit $BACKUP_STATUS"
+  cleanup
+  exit $[90 + $BACKUP_STATUS]
+fi
+
 verbose backup "Finished dumping oplog"
 
 verbose backup "Compress oplog file"
