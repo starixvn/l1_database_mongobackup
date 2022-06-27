@@ -180,7 +180,7 @@ else
 fi
 
 # Export some variables to use in child processes
-export TIMESTAMP
+export TIMESTAMP BACKUP_FULLPATH
 
 ### PARSING INPUT
 ###   (Variable should be ready to be used at this point)
