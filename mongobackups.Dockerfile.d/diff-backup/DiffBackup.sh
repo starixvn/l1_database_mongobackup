@@ -189,7 +189,7 @@ if [ "$VERBOSE" == true ]; then
   echo MONGO_HOST="$MONGO_HOST"
   echo MONGO_PORT="$MONGO_PORT"
   echo MONGO_USER="$MONGO_USER"
-  echo MONGO_PASS="$MONGO_PASS"
+  echo MONGO_PASS="<REDACTED>"
   echo MONGO_AUTHDB="$MONGO_AUTHDB"
   echo BACKUP_FULL="$BACKUP_FULL"
   echo BACKUP_PATH="$BACKUP_PATH"
@@ -289,7 +289,7 @@ mongodump \
   --query "
 { \"\$and\": [
   {\"ts\": {\"\$gte\": {\"\$timestamp\": {\"t\": $TIMESTAMP, \"i\": 0}}}},
-  {\"ns\": {\"\$not\": {\"\$regex\": \"_tmp(cuocs|ones)\$\"}}},
+  {\"ns\": {\"\$not\": {\"\$regex\": \"_tmp(cuocs|ones|bets)\$\"}}},
   {\"ns\": {\"\$not\": {\"\$regex\": \"system[.]profile\$\"}}}
 ]}" \
   --out $TMP_FOLDER \
