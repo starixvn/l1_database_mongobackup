@@ -20,8 +20,8 @@ usage() {
     -p  --password                Input user's password to authenticate
         --authenticationDatabase  Input database where user will be authenticated
         --backupPath              Input the path to save the backup file
-        --gitRepo                 
-        --gitToken                
+        --gitRepo                 The repository where to save dr data
+        --gitToken                The token to access git repository
 
     [to be updated]
   " 1>&2
