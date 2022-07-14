@@ -1,0 +1,20 @@
+FROM git3.nexdev.net:5050/l1/database/images/mongotools:1.0.0
+RUN apt-get update \
+ && apt-get install --no-install-recommends -y \
+      git gpg gpg-agent \
+ && rm -rf /var/lib/apt/lists/*
+ENV GNUPGHOME /gnupg
+RUN mkdir ${GNUPGHOME} \
+ && git config --global http.sslverify "false" \
+ && git config --global user.name "DR Backup" \
+ && git config --global user.email "billy.bui@luminet.vn" \
+ && git config --global user.signingkey "35FE8BD2B4A31A811130DCE512BE327CBB17BF60" \
+ && git config --global commit.gpgSign "true" \
+ && git config --global tag.gpgSign "true"
+WORKDIR /root
+COPY ./dr-backup/*.sh ./
+COPY ./dr-backup/dbs/ /dbs/
+VOLUME /drbackup /gnupg
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["./DRBackup.sh", "-h"]
+ 

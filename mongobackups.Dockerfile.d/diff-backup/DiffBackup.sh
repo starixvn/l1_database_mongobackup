@@ -257,7 +257,7 @@ INFO=true verbose main "Starting diff backup process"
 INFO=true verbose main "Backup process will use $CPUs cores"
 
 verbose folder "Create temporary dumping folder"
-mkdir /tmp/mongodump
+mkdir -p $TMP_FOLDER
 verbose folder "Created temporary dumping folder"
 
 INFO=true verbose timestamp $TIMESTAMP
