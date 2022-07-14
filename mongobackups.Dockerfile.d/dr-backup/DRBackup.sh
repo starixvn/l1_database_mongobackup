@@ -256,7 +256,7 @@ do
       --authenticationDatabase "$MONGO_AUTHDB" \
       --db "$DB" \
       --collection "$COLL" \
-      --out $BACKUP_PATH \
+      --out "$BACKUP_PATH" \
       --uri "$MONGO_URI"
     BACKUP_STATUS=$?
     if [ "$BACKUP_STATUS" != 0 ]; then
