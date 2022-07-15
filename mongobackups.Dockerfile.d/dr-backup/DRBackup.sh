@@ -120,6 +120,7 @@ CPUs=$(expr $CPUs / 4)
 VERBOSE=false
 MONGO_AUTHDB="admin"
 BACKUP_PATH="/drbackup"
+SQUASH_LIMIT=20
 
 # Process options
 while true; do
@@ -270,7 +271,13 @@ verbose backup "Finished dumping collections"
 verbose git "Starting commiting new changes"
 git add .
 git commit -m "Backup at $(date -u "+%Y-%m-%d %H:%M")" -S
-git push
+if [ "$(git log --oneline | wc -l)" -gt "$SQUASH_LIMIT" ]; then
+  verbose git "Limitting number of commit, squashing..."
+  git checkout --orphan squash-main main
+  git commit -m "Squash at $(date -u "+%Y-%m-%d %H:%M")"
+  git branch -M squash-main main
+fi
+git push --force
 verbose git "Finished commiting new changes"
 
 INFO=true verbose main "Finished dr backup process"
