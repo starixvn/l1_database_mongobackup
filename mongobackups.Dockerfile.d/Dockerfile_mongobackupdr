@@ -10,7 +10,8 @@ RUN mkdir ${GNUPGHOME} \
  && git config --global user.email "billy.bui@luminet.vn" \
  && git config --global user.signingkey "35FE8BD2B4A31A811130DCE512BE327CBB17BF60" \
  && git config --global commit.gpgSign "true" \
- && git config --global tag.gpgSign "true"
+ && git config --global tag.gpgSign "true" \
+ && git config --global gc.reflogexpireunreachable "all"
 WORKDIR /root
 COPY ./dr-backup/*.sh ./
 COPY ./dr-backup/dbs/ /dbs/
