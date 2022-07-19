@@ -278,6 +278,7 @@ if [ "$(git log --oneline | wc -l)" -gt "$SQUASH_LIMIT" ]; then
   git branch -M squash-main main
 fi
 git push --force
+git gc --prune=now
 verbose git "Finished commiting new changes"
 
 INFO=true verbose main "Finished dr backup process"
