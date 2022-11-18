@@ -1,15 +1,15 @@
-FROM debian:10.12-slim AS builder
+FROM hub.lumigame.com/docker-hub/library/debian:10.13-slim AS builder
 WORKDIR /tmp
 RUN apt-get update \
  && apt-get install --no-install-recommends -y \
       ca-certificates \
       curl \
- && curl https://downloads.mongodb.com/compass/mongodb-mongosh_1.5.0_amd64.deb -o mongosh.deb \
- && curl https://fastdl.mongodb.org/tools/db/mongodb-database-tools-debian10-x86_64-100.5.2.tgz -o mongodb-tools.tgz
+ && curl https://downloads.mongodb.com/compass/mongodb-mongosh_1.6.0_amd64.deb -o mongosh.deb \
+ && curl https://fastdl.mongodb.org/tools/db/mongodb-database-tools-debian10-x86_64-100.6.1.tgz -o mongodb-tools.tgz
 RUN dpkg -i mongosh.deb \
  && tar -xvzf mongodb-tools.tgz --strip 2 -C /usr/bin
 
-FROM debian:10.12-slim
+FROM hub.lumigame.com/docker-hub/library/debian:10.13-slim
 WORKDIR /root
 RUN apt-get update \
  && apt-get install --no-install-recommends -y \
