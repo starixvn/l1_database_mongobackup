@@ -1,18 +1,22 @@
-REGISTRY=git3.nexdev.net:5050/l1/database/images
+#!/bin/bash
+REGISTRY=hub.lumigame.com
+PROJECT=ldb
+export $(grep -v '^#' .env.docker | xargs -d '\n')
+echo "$HUB_TOKEN" | docker login -u "$HUB_LOGIN" --password-stdin $REGISTRY
+
 for FILE in $(ls Dockerfile_*)
 do
   SERVICE=$(echo $FILE | sed 's/^Dockerfile_\(.*\)$/\1/')
   VERSION=$(cat version_$SERVICE | tr -d '\r\n')
   echo $SERVICE:$VERSION
 
-  echo "ZPffaRzjxMpGs2X8bQ_E" | docker login -u billy.bui --password-stdin git3.nexdev.net:5050
-  docker pull $REGISTRY/$SERVICE:latest || true
+  docker pull $REGISTRY/$PROJECT/$SERVICE:latest || true
   docker build \
-    --tag $REGISTRY/$SERVICE:$VERSION \
+    --tag $REGISTRY/$PROJECT/$SERVICE:$VERSION \
     --file $FILE \
-    --cache-from $REGISTRY/$SERVICE:latest \
+    --cache-from $REGISTRY/$PROJECT/$SERVICE:latest \
     .
-  docker push $REGISTRY/$SERVICE:$VERSION
-  docker tag $REGISTRY/$SERVICE:$VERSION $REGISTRY/$SERVICE:latest
-  docker push $REGISTRY/$SERVICE:latest
+  docker push $REGISTRY/$PROJECT/$SERVICE:$VERSION
+  docker tag $REGISTRY/$PROJECT/$SERVICE:$VERSION $REGISTRY/$PROJECT/$SERVICE:latest
+  docker push $REGISTRY/$PROJECT/$SERVICE:latest
 done

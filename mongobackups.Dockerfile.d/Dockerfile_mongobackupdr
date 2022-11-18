@@ -1,4 +1,4 @@
-FROM git3.nexdev.net:5050/l1/database/images/mongotools:1.0.0
+FROM hub.lumigame.com/ldb/mongotools:1.0.1
 RUN apt-get update \
  && apt-get install --no-install-recommends -y \
       git gpg gpg-agent \

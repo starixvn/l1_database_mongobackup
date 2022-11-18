@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_VERSION=1.0.0
+SCRIPT_VERSION=1.0.6
 SCRIPT_LABEL=DRBACKUP
 
 ################################################################################
@@ -195,6 +195,12 @@ else
   if [ "${GIT_REMOTE/\:\/\/*\:*@/://}" != "$GIT_REPO" ]; then
     ERROR=true verbose assert "  Git repository does not match. Abort to avoid incorrect data changes."
     exit 15
+  fi
+
+  LOCK_FILE=".git/index.lock"
+  if [ -f "${LOCK_FILE}" ]; then
+    ERROR=true verbose assert "  Lock file [${LOCK_FILE}] detected. Maybe last run is interrupted. Attempting to remove lock file..."
+    rm ${LOCK_FILE}
   fi
 fi
 
