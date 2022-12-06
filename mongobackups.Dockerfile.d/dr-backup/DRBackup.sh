@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_VERSION=1.1.2
+SCRIPT_VERSION=1.1.4
 SCRIPT_LABEL=DRBACKUP
 
 ################################################################################
@@ -261,6 +261,10 @@ if [ "$GIT_STATUS" != 0 ]; then
   fi
   verbose git "Finished cloning git repository"
 else
+  verbose git "Changing access token"
+  git remote set-url origin ${GIT_REPO/\:\/\//://oauth2:${ACCESS_TOKEN}@}
+  git remote set-url --push origin ${GIT_REPO/\:\/\//://oauth2:${ACCESS_TOKEN}@}
+  verbose git "Finished changing access token"
   verbose git "Starting cleaning git repository"
   git reset --hard
   git clean -fd
