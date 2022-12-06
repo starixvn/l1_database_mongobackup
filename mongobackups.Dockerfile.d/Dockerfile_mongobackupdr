@@ -2,6 +2,7 @@ FROM hub.lumigame.com/ldb/mongotools:1.0.1
 RUN apt-get update \
  && apt-get install --no-install-recommends -y \
       git gpg gpg-agent \
+      curl jq ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 ENV GNUPGHOME /gnupg
 RUN mkdir ${GNUPGHOME} \

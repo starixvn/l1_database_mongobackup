@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_VERSION=1.0.6
+SCRIPT_VERSION=1.1.2
 SCRIPT_LABEL=DRBACKUP
 
 ################################################################################
@@ -20,8 +20,9 @@ usage() {
     -p  --password                Input user's password to authenticate
         --authenticationDatabase  Input database where user will be authenticated
         --backupPath              Input the path to save the backup file
-        --gitRepo                 The repository where to save dr data
-        --gitToken                The token to access git repository
+        --gitURL                  The GitLab server
+        --repoId                  The repository id where to save dr data
+        --gitToken                The token to access GitLab server
 
     [to be updated]
   " 1>&2
@@ -98,7 +99,7 @@ cleanup() {
 #       But if you encounter an unknown error, this might be a thing to check.
 TEMPOPT=$(getopt -n "$SCRIPT_LABEL" \
                  -o hvVu:p: \
-                 -l help,host:,port:,version,verbose,username:,password:,authenticationDatabase:,backupPath:,gitRepo:,gitToken: \
+                 -l help,host:,port:,version,verbose,username:,password:,authenticationDatabase:,backupPath:,gitURL:,repoId:,gitToken: \
                  -- "$@" \
          )
 
@@ -135,7 +136,8 @@ while true; do
     -p | --password               ) MONGO_PASS="$2";    shift 2; ;;
          --authenticationDatabase ) MONGO_AUTHDB="$2";  shift 2; ;;
          --backupPath             ) BACKUP_PATH="$2";   shift 2; ;;
-         --gitRepo                ) GIT_REPO="$2";      shift 2; ;;
+         --gitURL                 ) GIT_URL="$2";       shift 2; ;;
+         --repoId                 ) REPO_ID="$2";       shift 2; ;;
          --gitToken               ) GIT_TOKEN="$2";     shift 2; ;;
          --                       ) shift 1;            break;   ;;
          *                        ) exit 1;             break;   ;;
@@ -171,7 +173,8 @@ if [ "$VERBOSE" == true ]; then
   echo MONGO_PASS="<REDACTED>"
   echo MONGO_AUTHDB="$MONGO_AUTHDB"
   echo BACKUP_PATH="$BACKUP_PATH"
-  echo GIT_REPO="$GIT_REPO"
+  echo GIT_URL="$GIT_URL"
+  echo REPO_ID="$REPO_ID"
   echo GIT_TOKEN="<REDACTED>"
 fi
 
@@ -180,6 +183,10 @@ if [ ! -d "$BACKUP_PATH" ]; then
   ERROR=true verbose assert "  Backup folder does not exists"
   exit 13
 fi
+
+verbose gitlab "Fetch git repository url"
+GIT_REPO=$(curl -s --header "PRIVATE-TOKEN: $GIT_TOKEN" -X GET $GIT_URL/api/v4/projects/$REPO_ID | jq -r '.http_url_to_repo')
+verbose gitlab "Repository url: ${GIT_REPO}"
 
 verbose git "Checking git folder status"
 cd $BACKUP_PATH
@@ -232,9 +239,21 @@ trap 'echo Process $$ terminated by SIGTERM; cleanup' SIGTERM
 
 INFO=true verbose main "Starting dr backup process"
 
+verbose gitlab "Create access token"
+TOKEN_PATH=/tmp/current_token
+curl -s --header "PRIVATE-TOKEN: ${GIT_TOKEN}" --header "Content-Type: application/json" -X POST \
+     --data '{ "name": "Temporary DR Token", "scopes": ["api", "write_repository"], "access_level": 40 }' \
+     -o $TOKEN_PATH \
+     $GIT_URL/api/v4/projects/$REPO_ID/access_tokens
+ACCESS_TOKEN=$(cat $TOKEN_PATH | jq -r '.token')
+if [ "$ACCESS_TOKEN" == "null" ]; then
+  ERROR=true verbose assert "  Cannot get token to access git"
+  exit 16
+fi
+
 if [ "$GIT_STATUS" != 0 ]; then
   verbose git "Starting cloning git repository"
-  git clone ${GIT_REPO/\:\/\//://oauth2:${GIT_TOKEN}@} .
+  git clone ${GIT_REPO/\:\/\//://oauth2:${ACCESS_TOKEN}@} .
   GIT_STATUS=$?
   if [ "$GIT_STATUS" != 0 ]; then
     ERROR=true verbose assert "  Failed to clone git repository"
@@ -286,6 +305,11 @@ fi
 git push --force
 git gc --prune=now
 verbose git "Finished commiting new changes"
+
+verbose gitlab "Remove access token"
+ACCESS_TOKEN=$(cat $TOKEN_PATH | jq -r '.id')
+curl -s --header "PRIVATE-TOKEN: ${GIT_TOKEN}" -X DELETE \
+     $GIT_URL/api/v4/projects/$REPO_ID/access_tokens/$ACCESS_TOKEN
 
 INFO=true verbose main "Finished dr backup process"
 
