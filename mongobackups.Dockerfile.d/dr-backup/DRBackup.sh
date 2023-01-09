@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_VERSION=2.0.3
+SCRIPT_VERSION=2.0.6
 SCRIPT_LABEL=DRBACKUP
 
 ################################################################################
@@ -92,20 +92,20 @@ cleanup() {
 }
 
 notify() {
-  if [ -z $BOT_API_KEY ]; then
+  if [ -z "$BOT_API_KEY" ]; then
     ERROR=true verbose telegram "No BOT_API_KEY provided. Returning..."
     return -1
   fi
 
-  local CHAT_ID=$1
-  local MESSAGE=$2
+  local CHAT_ID="$1"
+  local MESSAGE="$2"
 
-  if [ -z $CHAT_ID ]; then
+  if [ -z "$CHAT_ID" ]; then
     ERROR=true verbose telegram "No CHAT_ID provided. Returning..."
     return -2
   fi
 
-  if [ -z $MESSAGE ]; then
+  if [ -z "$MESSAGE" ]; then
     ERROR=true verbose telegram "No MESSAGE provided. Returning..."
     return -3
   fi
@@ -113,10 +113,13 @@ notify() {
   curl "https://api.telegram.org/bot$BOT_API_KEY/sendMessage" \
     --data-urlencode "parse_mode=MarkdownV2" \
     --data-urlencode "chat_id=$CHAT_ID" \
-    --data-urlencode "message=[$SCRIPT_LABEL:$SCRIPT_VERSION] $PATCH_FOLDER #$MONGO_PORT\n$MESSAGE"
+    --data-urlencode "text=[$SCRIPT_LABEL:$SCRIPT_VERSION] $PATCH_FOLDER $MONGO_PORT
+$MESSAGE"
 
   verbose telegram "Successfully sent message to $CHAT_ID"
 }
+
+
 ### FUNCTIONS DONE
 ###   (No more function declaration from this point)
 ################################################################################
@@ -356,7 +359,7 @@ verbose backup "Finished dumping collections"
 
 verbose git "Starting commiting new changes"
 git add .
-git commit -m "Backup at $(date -u "+%Y-%m-%d %H:%M")" -S
+git commit -m "Backup at $(date -u "+%Y-%m-%d %H:%M")"
 if [ "$(git log --oneline | wc -l)" -gt "$SQUASH_LIMIT" ]; then
   verbose git "Limitting number of commit, squashing..."
   git checkout --orphan squash-main main
@@ -368,23 +371,24 @@ verbose git "Finished commiting new changes"
 
 verbose patch "Starting patching procedure"
 verbose patch "  Create patch for latest commit"
-mkdir $PATCH_PATH -p
+mkdir "$PATCH_PATH" -p
 
 # If HEAD has no previous commit, HEAD is a squashed commit
 git rev-parse HEAD^ >/dev/null 2>&1
 SQUASHED=$?
 if [ "$SQUASHED" != 0 ]; then
   # If squashed, there are only commit in the tree, HEAD^ will cause git to fail
-  git format-patch --output-directory $PATCH_PATH HEAD HEAD
+  git format-patch --output-directory "$PATCH_PATH" HEAD HEAD >/tmp/patch-name
 else
   # Generate patch for latest commit only
-  git format-patch --output-directory $PATCH_PATH ^HEAD^ HEAD
+  git format-patch --output-directory "$PATCH_PATH" ^HEAD^ HEAD >/tmp/patch-name
 fi
 
 verbose patch "  Encrypt patch file"
+
 # gpg only accept one file at a time, so we fetch only 1 file to proceed (in theory there will be only 1 file)
-PATCH_NAME=$( ls "$PATCH_PATH/*.patch" -t | head -1 )
-gpg --encrypt --recipient dr@luminet.vn $PATCH_NAME
+PATCH_NAME=$( cat /tmp/patch-name )
+gpg --encrypt --recipient dr@luminet.vn "$PATCH_NAME"
 
 verbose patch "  Send patch to ftp"
 { pftp -vin $FTP_HOST $FTP_PORT >$FTP_OUTPUT 2>&1 ; } <<EOF
