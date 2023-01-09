@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_VERSION=2.0.0
+SCRIPT_VERSION=2.0.3
 SCRIPT_LABEL=DRBACKUP
 
 ################################################################################
@@ -26,6 +26,7 @@ usage() {
         --ftpPass                 The password to connect to FTP server
         --botKey                  The API key of Telegram bot
         --roomId                  The Telegram chat id
+        --patchFolder             The sub-folder name for storing patches
 
     [to be updated]
   " 1>&2
@@ -91,17 +92,30 @@ cleanup() {
 }
 
 notify() {
-  if [ ! -z $BOT_API_KEY ]; then
-    local CHAT_ID=$1
-    local MESSAGE=$2
-
-    curl "https://api.telegram.org/bot$BOT_API_KEY/sendMessage" \
-      --data-urlencode "parse_mode=MarkdownV2" \
-      --data-urlencode "chat_id=$CHAT_ID" \
-      --data-urlencode "message=$MESSAGE"
-
-    verbose telegram "Successfully sent message to $CHAT_ID"
+  if [ -z $BOT_API_KEY ]; then
+    ERROR=true verbose telegram "No BOT_API_KEY provided. Returning..."
+    return -1
   fi
+
+  local CHAT_ID=$1
+  local MESSAGE=$2
+
+  if [ -z $CHAT_ID ]; then
+    ERROR=true verbose telegram "No CHAT_ID provided. Returning..."
+    return -2
+  fi
+
+  if [ -z $MESSAGE ]; then
+    ERROR=true verbose telegram "No MESSAGE provided. Returning..."
+    return -3
+  fi
+
+  curl "https://api.telegram.org/bot$BOT_API_KEY/sendMessage" \
+    --data-urlencode "parse_mode=MarkdownV2" \
+    --data-urlencode "chat_id=$CHAT_ID" \
+    --data-urlencode "message=[$SCRIPT_LABEL:$SCRIPT_VERSION] $PATCH_FOLDER #$MONGO_PORT\n$MESSAGE"
+
+  verbose telegram "Successfully sent message to $CHAT_ID"
 }
 ### FUNCTIONS DONE
 ###   (No more function declaration from this point)
@@ -116,13 +130,14 @@ notify() {
 #       But if you encounter an unknown error, this might be a thing to check.
 TEMPOPT=$(getopt -n "$SCRIPT_LABEL" \
                  -o hvVu:p: \
-                 -l help,host:,port:,version,verbose,username:,password:,authenticationDatabase:,backupPath:,ftpHost:,ftpPort:,ftpUser:,ftpPass:,botKey:,roomId: \
+                 -l help,host:,port:,version,verbose,username:,password:,authenticationDatabase:,backupPath:,ftpHost:,ftpPort:,ftpUser:,ftpPass:,botKey:,roomId:,patchFolder: \
                  -- "$@" \
          )
 
 # If getopt return non-0 code, terminate this script
 if [ $? != 0 ]; then
   ERROR=true verbose getopt "Terminating..."
+  notify $NOTI_ROOM "(1) Failed to parse script parameters"
   exit 1
 fi
 
@@ -142,6 +157,7 @@ PATCH_PATH="/tmp/patch"
 FTP_OUTPUT="/tmp/ftp-output.log"
 SQUASH_LIMIT=72
 NOTI_ROOM=925798134
+PATCH_FOLDER=
 
 # Process options
 while true; do
@@ -162,6 +178,7 @@ while true; do
          --ftpPass                ) FTP_PASS="$2";      shift 2; ;;
          --botKey                 ) BOT_API_KEY="$2";   shift 2; ;;
          --roomId                 ) NOTI_ROOM="$2";     shift 2; ;;
+         --patchFolder            ) PATCH_FOLDER="$2";  shift 2; ;;
          --                       ) shift 1;            break;   ;;
          *                        ) exit 1;             break;   ;;
   esac
@@ -197,6 +214,7 @@ if [ "$VERBOSE" == true ]; then
   echo MONGO_AUTHDB="$MONGO_AUTHDB"
   echo BACKUP_PATH="$BACKUP_PATH"
   echo PATCH_PATH="$PATCH_PATH"
+  echo PATCH_FOLDER="$PATCH_FOLDER"
   echo FTP_HOST="$FTP_HOST"
   echo FTP_PORT="$FTP_PORT"
   echo FTP_USER="$FTP_USER"
@@ -208,6 +226,7 @@ fi
 verbose assert "Checking backup folder exists"
 if [ ! -d "$BACKUP_PATH" ]; then
   ERROR=true verbose assert "  Backup folder does not exists"
+  notify $NOTI_ROOM "(13) Backup folder does not exists"
   exit 13
 fi
 
@@ -231,6 +250,7 @@ EOF
 verbose ftp "Checking ftp connection"
 if { grep "timed out" $FTP_OUTPUT; }; then
   ERROR=true verbose assert "  FTP connection timed out"
+  notify $NOTI_ROOM "(408) FTP connection timed out"
   exit 408
 fi
 
@@ -238,6 +258,7 @@ fi
 verbose ftp "Checking ftp authentication"
 if { grep "^[45]3" $FTP_OUTPUT; }; then
   ERROR=true verbose assert "  FTP authentication failed"
+  notify $NOTI_ROOM "(530) FTP authentication failed"
   exit 530
 fi
 
@@ -245,6 +266,7 @@ fi
 verbose ftp "Checking ftp errors"
 if { grep "^[45]" $FTP_OUTPUT; }; then
   ERROR=true verbose assert "  FTP error occurs"
+  notify $NOTI_ROOM "(500) FTP error occurs"
   exit 500
 fi
 
@@ -255,6 +277,7 @@ GIT_STATUS=$?
 if [ "$GIT_STATUS" != 0 ]; then
   if [ ! -z "$(ls -A)" ]; then
     ERROR=true verbose assert "  Backup folder is not git folder and is not empty"
+    notify $NOTI_ROOM "(14) Backup folder is not git folder and is not empty"
     exit 14
   fi
 fi
@@ -293,6 +316,7 @@ if [ "$GIT_STATUS" != 0 ]; then
   GIT_STATUS=$?
   if [ "$GIT_STATUS" != 0 ]; then
     ERROR=true verbose assert "  Failed to initiate git repository"
+    notify $NOTI_ROOM "($GIT_STATUS) Failed to initiate git repository"
     exit $GIT_STATUS
   fi
   verbose git "Finished initiating git repository"
@@ -323,6 +347,7 @@ do
     BACKUP_STATUS=$?
     if [ "$BACKUP_STATUS" != 0 ]; then
       ERROR=true verbose assert "  - Error while dumping $DB.$COLL, returned $BACKUP_STATUS"
+      notify $NOTI_ROOM "($BACKUP_STATUS) Error while dumping $DB.$COLL"
     fi
   done
   verbose dump "- Finished processing database [${DB}]..."
@@ -337,7 +362,6 @@ if [ "$(git log --oneline | wc -l)" -gt "$SQUASH_LIMIT" ]; then
   git checkout --orphan squash-main main
   git commit -m "Squash at $(date -u "+%Y-%m-%d %H:%M")"
   git branch -M squash-main main
-  SQUASHED=1
 fi
 git gc --prune=now
 verbose git "Finished commiting new changes"
@@ -345,7 +369,11 @@ verbose git "Finished commiting new changes"
 verbose patch "Starting patching procedure"
 verbose patch "  Create patch for latest commit"
 mkdir $PATCH_PATH -p
-if [ "$SQUASHED" == 1 ]; then
+
+# If HEAD has no previous commit, HEAD is a squashed commit
+git rev-parse HEAD^ >/dev/null 2>&1
+SQUASHED=$?
+if [ "$SQUASHED" != 0 ]; then
   # If squashed, there are only commit in the tree, HEAD^ will cause git to fail
   git format-patch --output-directory $PATCH_PATH HEAD HEAD
 else
@@ -363,13 +391,14 @@ verbose patch "  Send patch to ftp"
 user $FTP_USER $FTP_PASS
 binary
 mkdir /LUM/patches
-cd /LUM/patches
+mkdir /LUM/patches/$PATCH_FOLDER
+cd /LUM/patches/$PATCH_FOLDER
 put $PATCH_NAME.gpg
 bye
 EOF
 
 verbose patch "  Send telegram message"
-notify $NOTI_ROOM "Successfully pushed $PATCH_NAME.gpg to ftp server"
+notify $NOTI_ROOM "Successfully pushed $PATCH_FOLDER/$PATCH_NAME.gpg to ftp server"
 
 verbose patch "Finished patching procedure"
 

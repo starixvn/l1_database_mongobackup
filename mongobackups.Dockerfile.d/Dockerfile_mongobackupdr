@@ -7,6 +7,8 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 ENV GNUPGHOME /gnupg
 RUN mkdir ${GNUPGHOME} -p \
+ && git config --global user.name "DR Backup" \
+ && git config --global user.email "billy.bui@luminet.vn" \
  && git config --global gc.reflogexpireunreachable "all"
 WORKDIR /root
 COPY ./dr-backup/*.sh ./
