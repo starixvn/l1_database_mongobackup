@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_VERSION=2.0.8
+SCRIPT_VERSION=2.0.9
 SCRIPT_LABEL=DRBACKUP
 
 ################################################################################
@@ -243,7 +243,7 @@ fi
 verbose assert "Checking backup folder exists"
 if [ ! -d "$BACKUP_PATH" ]; then
   ERROR=true verbose assert "  Backup folder does not exists"
-  notify "$NOTI_ROOM" "(13) Backup folder does not exists"
+  notify "$NOTI_ROOM" "\`ERR-13\` Backup folder does not exists"
   exit 13
 fi
 
@@ -253,12 +253,12 @@ verbose ftp "Running ftp assert sequences"
 user $FTP_USER $FTP_PASS
 binary
 cd /LUM
-mkdir /LUM/init
+mkdir /LUM/.init/${PATCH_FOLDER}
 !touch /tmp/assert
-put /tmp/assert /LUM/init/assert
-get /LUM/init/assert /tmp/assert-get
-del /LUM/init/assert
-rmdir /LUM/init
+put /tmp/assert /LUM/.init/${PATCH_FOLDER}/assert
+get /LUM/.init/${PATCH_FOLDER}/assert /tmp/assert-get
+del /LUM/.init/${PATCH_FOLDER}/assert
+rmdir /LUM/.init/${PATCH_FOLDER}
 !rm /tmp/assert*
 bye
 EOF
@@ -267,7 +267,7 @@ EOF
 verbose ftp "Checking ftp connection"
 if { grep "timed out" $FTP_OUTPUT; }; then
   ERROR=true verbose assert "  FTP connection timed out"
-  notify "$NOTI_ROOM" "(408) FTP connection timed out"
+  notify "$NOTI_ROOM" "\`ERR-408\` FTP connection timed out"
   exit 408
 fi
 
@@ -275,7 +275,7 @@ fi
 verbose ftp "Checking ftp authentication"
 if { grep "^[45]3" $FTP_OUTPUT; }; then
   ERROR=true verbose assert "  FTP authentication failed"
-  notify "$NOTI_ROOM" "(530) FTP authentication failed"
+  notify "$NOTI_ROOM" "\`ERR-530\`FTP authentication failed"
   exit 530
 fi
 
@@ -283,7 +283,7 @@ fi
 verbose ftp "Checking ftp errors"
 if { grep "^[45]" $FTP_OUTPUT; }; then
   ERROR=true verbose assert "  FTP error occurs"
-  notify "$NOTI_ROOM" "(500) FTP error occurs"
+  notify "$NOTI_ROOM" "\`ERR-500\` FTP error occurs"
   exit 500
 fi
 
@@ -294,7 +294,7 @@ GIT_STATUS=$?
 if [ "$GIT_STATUS" != 0 ]; then
   if [ ! -z "$(ls -A)" ]; then
     ERROR=true verbose assert "  Backup folder is not git folder and is not empty"
-    notify "$NOTI_ROOM" "(14) Backup folder is not git folder and is not empty"
+    notify "$NOTI_ROOM" "\`ERR-14\` Backup folder is not git folder and is not empty"
     exit 14
   fi
 fi
