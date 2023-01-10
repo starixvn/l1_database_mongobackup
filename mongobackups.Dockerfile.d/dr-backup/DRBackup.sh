@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_VERSION=2.0.6
+SCRIPT_VERSION=2.0.8
 SCRIPT_LABEL=DRBACKUP
 
 ################################################################################
@@ -110,11 +110,25 @@ notify() {
     return -3
   fi
 
-  curl "https://api.telegram.org/bot$BOT_API_KEY/sendMessage" \
+  MESSAGE="\\[ $SCRIPT_LABEL:$SCRIPT_VERSION \\] *${PATCH_FOLDER^^}* \`$MONGO_PORT\`
+$MESSAGE"
+
+  MESSAGE="${MESSAGE//\#/\\#}"
+  MESSAGE="${MESSAGE//>/\\>}"
+  MESSAGE="${MESSAGE//+/\\+}"
+  MESSAGE="${MESSAGE//-/\\-}"
+  MESSAGE="${MESSAGE//=/\\=}"
+  MESSAGE="${MESSAGE//|/\\|}"
+  MESSAGE="${MESSAGE//{/\\{}"
+  MESSAGE="${MESSAGE//\}/\\\}}"
+  MESSAGE="${MESSAGE//./\\.}"
+  MESSAGE="${MESSAGE//\!/\\!}"
+
+  curl --get \
     --data-urlencode "parse_mode=MarkdownV2" \
     --data-urlencode "chat_id=$CHAT_ID" \
-    --data-urlencode "text=[$SCRIPT_LABEL:$SCRIPT_VERSION] $PATCH_FOLDER $MONGO_PORT
-$MESSAGE"
+    --data-urlencode "text=$MESSAGE" \
+    -- "https://api.telegram.org/bot$BOT_API_KEY/sendMessage"
 
   verbose telegram "Successfully sent message to $CHAT_ID"
 }
@@ -140,7 +154,7 @@ TEMPOPT=$(getopt -n "$SCRIPT_LABEL" \
 # If getopt return non-0 code, terminate this script
 if [ $? != 0 ]; then
   ERROR=true verbose getopt "Terminating..."
-  notify $NOTI_ROOM "(1) Failed to parse script parameters"
+  notify "$NOTI_ROOM" "(1) Failed to parse script parameters"
   exit 1
 fi
 
@@ -229,7 +243,7 @@ fi
 verbose assert "Checking backup folder exists"
 if [ ! -d "$BACKUP_PATH" ]; then
   ERROR=true verbose assert "  Backup folder does not exists"
-  notify $NOTI_ROOM "(13) Backup folder does not exists"
+  notify "$NOTI_ROOM" "(13) Backup folder does not exists"
   exit 13
 fi
 
@@ -253,7 +267,7 @@ EOF
 verbose ftp "Checking ftp connection"
 if { grep "timed out" $FTP_OUTPUT; }; then
   ERROR=true verbose assert "  FTP connection timed out"
-  notify $NOTI_ROOM "(408) FTP connection timed out"
+  notify "$NOTI_ROOM" "(408) FTP connection timed out"
   exit 408
 fi
 
@@ -261,7 +275,7 @@ fi
 verbose ftp "Checking ftp authentication"
 if { grep "^[45]3" $FTP_OUTPUT; }; then
   ERROR=true verbose assert "  FTP authentication failed"
-  notify $NOTI_ROOM "(530) FTP authentication failed"
+  notify "$NOTI_ROOM" "(530) FTP authentication failed"
   exit 530
 fi
 
@@ -269,7 +283,7 @@ fi
 verbose ftp "Checking ftp errors"
 if { grep "^[45]" $FTP_OUTPUT; }; then
   ERROR=true verbose assert "  FTP error occurs"
-  notify $NOTI_ROOM "(500) FTP error occurs"
+  notify "$NOTI_ROOM" "(500) FTP error occurs"
   exit 500
 fi
 
@@ -280,7 +294,7 @@ GIT_STATUS=$?
 if [ "$GIT_STATUS" != 0 ]; then
   if [ ! -z "$(ls -A)" ]; then
     ERROR=true verbose assert "  Backup folder is not git folder and is not empty"
-    notify $NOTI_ROOM "(14) Backup folder is not git folder and is not empty"
+    notify "$NOTI_ROOM" "(14) Backup folder is not git folder and is not empty"
     exit 14
   fi
 fi
@@ -319,7 +333,7 @@ if [ "$GIT_STATUS" != 0 ]; then
   GIT_STATUS=$?
   if [ "$GIT_STATUS" != 0 ]; then
     ERROR=true verbose assert "  Failed to initiate git repository"
-    notify $NOTI_ROOM "($GIT_STATUS) Failed to initiate git repository"
+    notify "$NOTI_ROOM" "($GIT_STATUS) Failed to initiate git repository"
     exit $GIT_STATUS
   fi
   verbose git "Finished initiating git repository"
@@ -350,7 +364,7 @@ do
     BACKUP_STATUS=$?
     if [ "$BACKUP_STATUS" != 0 ]; then
       ERROR=true verbose assert "  - Error while dumping $DB.$COLL, returned $BACKUP_STATUS"
-      notify $NOTI_ROOM "($BACKUP_STATUS) Error while dumping $DB.$COLL"
+      notify "$NOTI_ROOM" "($BACKUP_STATUS) Error while dumping $DB.$COLL"
     fi
   done
   verbose dump "- Finished processing database [${DB}]..."
@@ -388,21 +402,21 @@ verbose patch "  Encrypt patch file"
 
 # gpg only accept one file at a time, so we fetch only 1 file to proceed (in theory there will be only 1 file)
 PATCH_NAME=$( cat /tmp/patch-name )
-gpg --encrypt --recipient dr@luminet.vn "$PATCH_NAME"
+gpg --encrypt --recipient dr@luminet.vn --output "$PATCH_NAME.gpg" "$PATCH_NAME"
 
 verbose patch "  Send patch to ftp"
-{ pftp -vin $FTP_HOST $FTP_PORT >$FTP_OUTPUT 2>&1 ; } <<EOF
+{ pftp -vin $FTP_HOST $FTP_PORT 2>&1 ; } <<EOF
 user $FTP_USER $FTP_PASS
 binary
 mkdir /LUM/patches
 mkdir /LUM/patches/$PATCH_FOLDER
 cd /LUM/patches/$PATCH_FOLDER
-put $PATCH_NAME.gpg
+put $PATCH_NAME.gpg $( basename -- "$PATCH_NAME.gpg" )
 bye
 EOF
 
 verbose patch "  Send telegram message"
-notify $NOTI_ROOM "Successfully pushed $PATCH_FOLDER/$PATCH_NAME.gpg to ftp server"
+notify "$NOTI_ROOM" "Successfully pushed \`$PATCH_FOLDER/$( basename -- "$PATCH_NAME.gpg" )\` to ftp server"
 
 verbose patch "Finished patching procedure"
 
