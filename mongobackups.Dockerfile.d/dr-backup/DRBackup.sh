@@ -404,8 +404,9 @@ verbose patch "  Encrypt patch file"
 PATCH_NAME=$( cat /tmp/patch-name )
 gpg --encrypt --recipient dr@luminet.vn --output "$PATCH_NAME.gpg" "$PATCH_NAME"
 
-verbose patch "  Send patch to ftp"
-{ pftp -vin $FTP_HOST $FTP_PORT 2>&1 ; } <<EOF
+while : ; do
+  verbose patch "  Send patch to ftp"
+  { pftp -vin $FTP_HOST $FTP_PORT >$FTP_OUTPUT 2>&1 ; } <<EOF
 user $FTP_USER $FTP_PASS
 binary
 mkdir /LUM/patches
@@ -414,6 +415,9 @@ cd /LUM/patches/$PATCH_FOLDER
 put $PATCH_NAME.gpg $( basename -- "$PATCH_NAME.gpg" )
 bye
 EOF
+  grep "Connection timed out" $FTP_OUTPUT || break
+  ERROR=true verbose patch "    Connection timed out, retry"
+done
 
 verbose patch "  Send telegram message"
 notify "$NOTI_ROOM" "Successfully pushed \`$PATCH_FOLDER/$( basename -- "$PATCH_NAME.gpg" )\` to ftp server"
