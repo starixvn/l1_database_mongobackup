@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_VERSION=1.0.6
+SCRIPT_VERSION=2.0.10
 SCRIPT_LABEL=DRBACKUP
 
 ################################################################################
@@ -20,8 +20,13 @@ usage() {
     -p  --password                Input user's password to authenticate
         --authenticationDatabase  Input database where user will be authenticated
         --backupPath              Input the path to save the backup file
-        --gitRepo                 The repository where to save dr data
-        --gitToken                The token to access git repository
+        --ftpHost                 The FTP host
+        --ftpPort                 The FTP port
+        --ftpUser                 The username to connect to FTP server
+        --ftpPass                 The password to connect to FTP server
+        --botKey                  The API key of Telegram bot
+        --roomId                  The Telegram chat id
+        --patchFolder             The sub-folder name for storing patches
 
     [to be updated]
   " 1>&2
@@ -85,6 +90,50 @@ cleanup() {
   git clean -fd
   exit 10
 }
+
+notify() {
+  if [ -z "$BOT_API_KEY" ]; then
+    ERROR=true verbose telegram "No BOT_API_KEY provided. Returning..."
+    return -1
+  fi
+
+  local CHAT_ID="$1"
+  local MESSAGE="$2"
+
+  if [ -z "$CHAT_ID" ]; then
+    ERROR=true verbose telegram "No CHAT_ID provided. Returning..."
+    return -2
+  fi
+
+  if [ -z "$MESSAGE" ]; then
+    ERROR=true verbose telegram "No MESSAGE provided. Returning..."
+    return -3
+  fi
+
+  MESSAGE="\\[ $SCRIPT_LABEL:$SCRIPT_VERSION \\] *${PATCH_FOLDER^^}* \`$MONGO_PORT\`
+$MESSAGE"
+
+  MESSAGE="${MESSAGE//\#/\\#}"
+  MESSAGE="${MESSAGE//>/\\>}"
+  MESSAGE="${MESSAGE//+/\\+}"
+  MESSAGE="${MESSAGE//-/\\-}"
+  MESSAGE="${MESSAGE//=/\\=}"
+  MESSAGE="${MESSAGE//|/\\|}"
+  MESSAGE="${MESSAGE//{/\\{}"
+  MESSAGE="${MESSAGE//\}/\\\}}"
+  MESSAGE="${MESSAGE//./\\.}"
+  MESSAGE="${MESSAGE//\!/\\!}"
+
+  curl --get \
+    --data-urlencode "parse_mode=MarkdownV2" \
+    --data-urlencode "chat_id=$CHAT_ID" \
+    --data-urlencode "text=$MESSAGE" \
+    -- "https://api.telegram.org/bot$BOT_API_KEY/sendMessage"
+
+  verbose telegram "Successfully sent message to $CHAT_ID"
+}
+
+
 ### FUNCTIONS DONE
 ###   (No more function declaration from this point)
 ################################################################################
@@ -98,13 +147,14 @@ cleanup() {
 #       But if you encounter an unknown error, this might be a thing to check.
 TEMPOPT=$(getopt -n "$SCRIPT_LABEL" \
                  -o hvVu:p: \
-                 -l help,host:,port:,version,verbose,username:,password:,authenticationDatabase:,backupPath:,gitRepo:,gitToken: \
+                 -l help,host:,port:,version,verbose,username:,password:,authenticationDatabase:,backupPath:,ftpHost:,ftpPort:,ftpUser:,ftpPass:,botKey:,roomId:,patchFolder: \
                  -- "$@" \
          )
 
 # If getopt return non-0 code, terminate this script
 if [ $? != 0 ]; then
   ERROR=true verbose getopt "Terminating..."
+  notify "$NOTI_ROOM" "(1) Failed to parse script parameters"
   exit 1
 fi
 
@@ -120,7 +170,11 @@ CPUs=$(expr $CPUs / 4)
 VERBOSE=false
 MONGO_AUTHDB="admin"
 BACKUP_PATH="/drbackup"
-SQUASH_LIMIT=20
+PATCH_PATH="/tmp/patch"
+FTP_OUTPUT="/tmp/ftp-output.log"
+SQUASH_LIMIT=72
+NOTI_ROOM=925798134
+PATCH_FOLDER=
 
 # Process options
 while true; do
@@ -135,8 +189,13 @@ while true; do
     -p | --password               ) MONGO_PASS="$2";    shift 2; ;;
          --authenticationDatabase ) MONGO_AUTHDB="$2";  shift 2; ;;
          --backupPath             ) BACKUP_PATH="$2";   shift 2; ;;
-         --gitRepo                ) GIT_REPO="$2";      shift 2; ;;
-         --gitToken               ) GIT_TOKEN="$2";     shift 2; ;;
+         --ftpHost                ) FTP_HOST="$2";      shift 2; ;;
+         --ftpPort                ) FTP_PORT="$2";      shift 2; ;;
+         --ftpUser                ) FTP_USER="$2";      shift 2; ;;
+         --ftpPass                ) FTP_PASS="$2";      shift 2; ;;
+         --botKey                 ) BOT_API_KEY="$2";   shift 2; ;;
+         --roomId                 ) NOTI_ROOM="$2";     shift 2; ;;
+         --patchFolder            ) PATCH_FOLDER="$2";  shift 2; ;;
          --                       ) shift 1;            break;   ;;
          *                        ) exit 1;             break;   ;;
   esac
@@ -171,14 +230,61 @@ if [ "$VERBOSE" == true ]; then
   echo MONGO_PASS="<REDACTED>"
   echo MONGO_AUTHDB="$MONGO_AUTHDB"
   echo BACKUP_PATH="$BACKUP_PATH"
-  echo GIT_REPO="$GIT_REPO"
-  echo GIT_TOKEN="<REDACTED>"
+  echo PATCH_PATH="$PATCH_PATH"
+  echo PATCH_FOLDER="$PATCH_FOLDER"
+  echo FTP_HOST="$FTP_HOST"
+  echo FTP_PORT="$FTP_PORT"
+  echo FTP_USER="$FTP_USER"
+  echo FTP_PASS="<REDACTED>"
+  echo BOT_API_KEY="<REDACTED>"
+  echo NOTI_ROOM="$NOTI_ROOM"
 fi
 
 verbose assert "Checking backup folder exists"
 if [ ! -d "$BACKUP_PATH" ]; then
   ERROR=true verbose assert "  Backup folder does not exists"
+  notify "$NOTI_ROOM" "\`ERR-13\` Backup folder does not exists"
   exit 13
+fi
+
+# Checking server status
+verbose ftp "Running ftp assert sequences"
+{ pftp -vin $FTP_HOST $FTP_PORT >$FTP_OUTPUT 2>&1 ; } <<EOF
+user $FTP_USER $FTP_PASS
+binary
+cd /LUM
+mkdir /LUM/.init/${PATCH_FOLDER}
+!touch /tmp/assert
+put /tmp/assert /LUM/.init/${PATCH_FOLDER}/assert
+get /LUM/.init/${PATCH_FOLDER}/assert /tmp/assert-get
+del /LUM/.init/${PATCH_FOLDER}/assert
+rmdir /LUM/.init/${PATCH_FOLDER}
+!rm /tmp/assert*
+bye
+EOF
+
+# Check if connection timed out
+verbose ftp "Checking ftp connection"
+if { grep "timed out" $FTP_OUTPUT; }; then
+  ERROR=true verbose assert "  FTP connection timed out"
+  notify "$NOTI_ROOM" "\`ERR-408\` FTP connection timed out"
+  exit 408
+fi
+
+# Check if authentication failed
+verbose ftp "Checking ftp authentication"
+if { grep "^[45]3" $FTP_OUTPUT; }; then
+  ERROR=true verbose assert "  FTP authentication failed"
+  notify "$NOTI_ROOM" "\`ERR-530\`FTP authentication failed"
+  exit 530
+fi
+
+# Check for other errors
+verbose ftp "Checking ftp errors"
+if { grep "^[45]" $FTP_OUTPUT; }; then
+  ERROR=true verbose assert "  FTP error occurs"
+  notify "$NOTI_ROOM" "\`ERR-500\` FTP error occurs"
+  exit 500
 fi
 
 verbose git "Checking git folder status"
@@ -188,19 +294,8 @@ GIT_STATUS=$?
 if [ "$GIT_STATUS" != 0 ]; then
   if [ ! -z "$(ls -A)" ]; then
     ERROR=true verbose assert "  Backup folder is not git folder and is not empty"
+    notify "$NOTI_ROOM" "\`ERR-14\` Backup folder is not git folder and is not empty"
     exit 14
-  fi
-else
-  GIT_REMOTE=$(git remote get-url origin)
-  if [ "${GIT_REMOTE/\:\/\/*\:*@/://}" != "$GIT_REPO" ]; then
-    ERROR=true verbose assert "  Git repository does not match. Abort to avoid incorrect data changes."
-    exit 15
-  fi
-
-  LOCK_FILE=".git/index.lock"
-  if [ -f "${LOCK_FILE}" ]; then
-    ERROR=true verbose assert "  Lock file [${LOCK_FILE}] detected. Maybe last run is interrupted. Attempting to remove lock file..."
-    rm ${LOCK_FILE}
   fi
 fi
 
@@ -233,14 +328,15 @@ trap 'echo Process $$ terminated by SIGTERM; cleanup' SIGTERM
 INFO=true verbose main "Starting dr backup process"
 
 if [ "$GIT_STATUS" != 0 ]; then
-  verbose git "Starting cloning git repository"
-  git clone ${GIT_REPO/\:\/\//://oauth2:${GIT_TOKEN}@} .
+  verbose git "Starting initiating git repository"
+  git init
   GIT_STATUS=$?
   if [ "$GIT_STATUS" != 0 ]; then
-    ERROR=true verbose assert "  Failed to clone git repository"
+    ERROR=true verbose assert "  Failed to initiate git repository"
+    notify "$NOTI_ROOM" "($GIT_STATUS) Failed to initiate git repository"
     exit $GIT_STATUS
   fi
-  verbose git "Finished cloning git repository"
+  verbose git "Finished initiating git repository"
 else
   verbose git "Starting cleaning git repository"
   git reset --hard
@@ -268,6 +364,7 @@ do
     BACKUP_STATUS=$?
     if [ "$BACKUP_STATUS" != 0 ]; then
       ERROR=true verbose assert "  - Error while dumping $DB.$COLL, returned $BACKUP_STATUS"
+      notify "$NOTI_ROOM" "($BACKUP_STATUS) Error while dumping $DB.$COLL"
     fi
   done
   verbose dump "- Finished processing database [${DB}]..."
@@ -276,16 +373,56 @@ verbose backup "Finished dumping collections"
 
 verbose git "Starting commiting new changes"
 git add .
-git commit -m "Backup at $(date -u "+%Y-%m-%d %H:%M")" -S
+git commit -m "Backup at $(date -u "+%Y-%m-%d %H:%M")"
 if [ "$(git log --oneline | wc -l)" -gt "$SQUASH_LIMIT" ]; then
   verbose git "Limitting number of commit, squashing..."
   git checkout --orphan squash-main main
   git commit -m "Squash at $(date -u "+%Y-%m-%d %H:%M")"
   git branch -M squash-main main
 fi
-git push --force
 git gc --prune=now
 verbose git "Finished commiting new changes"
+
+verbose patch "Starting patching procedure"
+verbose patch "  Create patch for latest commit"
+mkdir "$PATCH_PATH" -p
+
+# If HEAD has no previous commit, HEAD is a squashed commit
+git rev-parse HEAD^ >/dev/null 2>&1
+SQUASHED=$?
+if [ "$SQUASHED" != 0 ]; then
+  # If squashed, there are only commit in the tree, HEAD^ will cause git to fail
+  git format-patch --output-directory "$PATCH_PATH" HEAD HEAD >/tmp/patch-name
+else
+  # Generate patch for latest commit only
+  git format-patch --output-directory "$PATCH_PATH" ^HEAD^ HEAD >/tmp/patch-name
+fi
+
+verbose patch "  Encrypt patch file"
+
+# gpg only accept one file at a time, so we fetch only 1 file to proceed (in theory there will be only 1 file)
+PATCH_NAME=$( cat /tmp/patch-name )
+gpg --encrypt --recipient dr@luminet.vn --output "$PATCH_NAME.gpg" "$PATCH_NAME"
+
+while : ; do
+  verbose patch "  Send patch to ftp"
+  { pftp -vin $FTP_HOST $FTP_PORT >$FTP_OUTPUT 2>&1 ; } <<EOF
+user $FTP_USER $FTP_PASS
+binary
+mkdir /LUM/patches
+mkdir /LUM/patches/$PATCH_FOLDER
+cd /LUM/patches/$PATCH_FOLDER
+put $PATCH_NAME.gpg $( basename -- "$PATCH_NAME.gpg" )
+bye
+EOF
+  grep "Connection timed out" $FTP_OUTPUT || break
+  ERROR=true verbose patch "    Connection timed out, retry"
+done
+
+verbose patch "  Send telegram message"
+notify "$NOTI_ROOM" "Successfully pushed \`$PATCH_FOLDER/$( basename -- "$PATCH_NAME.gpg" )\` to ftp server"
+
+verbose patch "Finished patching procedure"
 
 INFO=true verbose main "Finished dr backup process"
 
