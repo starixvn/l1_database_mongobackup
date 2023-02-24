@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_VERSION=2.0.9
+SCRIPT_VERSION=2.0.10
 SCRIPT_LABEL=DRBACKUP
 
 ################################################################################
